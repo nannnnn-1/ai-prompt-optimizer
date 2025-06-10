@@ -63,14 +63,27 @@ export const Sidebar: React.FC = () => {
   return (
     <Sider 
       width={200} 
-      className="bg-white border-r border-gray-200"
+      style={{
+        backgroundColor: '#fff',
+        borderRight: '1px solid #f0f0f0',
+        height: 'calc(100vh - 64px)',
+        position: 'fixed',
+        left: 0,
+        top: 64,
+        overflow: 'auto',
+        zIndex: 999
+      }}
       breakpoint="lg"
       collapsedWidth="0"
     >
       <Menu
         mode="inline"
         selectedKeys={[location.pathname]}
-        className="h-full border-none"
+        style={{ 
+          height: '100%', 
+          border: 'none',
+          backgroundColor: '#fff'
+        }}
         items={menuItems}
       />
     </Sider>

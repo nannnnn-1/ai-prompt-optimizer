@@ -15,17 +15,23 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   showSidebar = true 
 }) => {
   return (
-    <Layout className="min-h-screen">
+    <Layout style={{ minHeight: '100vh' }}>
       <Header />
-      <Layout>
+      <Layout style={{ marginTop: '64px' }}>
         {showSidebar && <Sidebar />}
-        <Layout className="bg-gray-50">
-          <Content className="mx-4 my-6">
-            <div className="min-h-[calc(100vh-200px)] bg-white rounded-lg shadow-sm p-6">
-              {children}
-            </div>
+        <Layout style={{ 
+          marginLeft: showSidebar ? 200 : 0,
+          backgroundColor: '#f5f5f5'
+        }}>
+          <Content style={{ padding: '0', minHeight: 'calc(100vh - 64px)' }}>
+            {children}
           </Content>
-          <Footer className="text-center text-gray-500">
+          <Footer style={{ 
+            textAlign: 'center', 
+            backgroundColor: '#f5f5f5',
+            color: '#8c8c8c',
+            borderTop: '1px solid #f0f0f0'
+          }}>
             AI提示词优化器 ©2024 Created with ❤️
           </Footer>
         </Layout>

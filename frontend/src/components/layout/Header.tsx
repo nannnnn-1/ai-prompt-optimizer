@@ -1,12 +1,13 @@
 import React from 'react';
-import { Layout, Button, Avatar, Dropdown, Space } from 'antd';
-import { UserOutlined, LogoutOutlined, SettingOutlined, MenuFoldOutlined } from '@ant-design/icons';
+import { Layout, Button, Avatar, Dropdown, Space, Typography } from 'antd';
+import { UserOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { ROUTES } from '../../constants';
 import type { MenuProps } from 'antd';
 
 const { Header: AntHeader } = Layout;
+const { Text } = Typography;
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -42,36 +43,63 @@ export const Header: React.FC = () => {
   ];
 
   return (
-    <AntHeader className="bg-white shadow-sm border-b border-gray-200 px-6 flex items-center justify-between">
+    <AntHeader 
+      style={{ 
+        backgroundColor: '#fff', 
+        padding: '0 24px', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        borderBottom: '1px solid #f0f0f0',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
+        height: '64px'
+      }}
+    >
       {/* 左侧 - Logo和标题 */}
-      <div className="flex items-center space-x-4">
+      <div 
+        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+        onClick={() => navigate(ROUTES.HOME)}
+      >
         <div 
-          className="flex items-center cursor-pointer"
-          onClick={() => navigate(ROUTES.HOME)}
+          style={{ 
+            width: '32px', 
+            height: '32px', 
+            backgroundColor: '#1890ff', 
+            borderRadius: '8px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            marginRight: '12px' 
+          }}
         >
-          <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center mr-3">
-            <span className="text-white font-bold text-lg">AI</span>
-          </div>
-          <h1 className="text-xl font-bold text-gray-800 hidden sm:block">
-            AI提示词优化器
-          </h1>
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: '18px' }}>AI</Text>
         </div>
+        <Text strong style={{ fontSize: '20px', color: '#262626' }}>
+          AI提示词优化器
+        </Text>
       </div>
 
       {/* 右侧 - 用户菜单 */}
-      <div className="flex items-center space-x-4">
+      <div>
         {isAuthenticated ? (
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <Space className="cursor-pointer hover:bg-gray-50 px-3 py-2 rounded-lg">
-              <Avatar 
-                size="small" 
-                icon={<UserOutlined />} 
-                className="bg-primary-500"
-              />
-              <span className="text-gray-700 hidden sm:inline">
-                {user?.full_name || user?.username}
-              </span>
-            </Space>
+            <div style={{ cursor: 'pointer' }}>
+              <Space>
+                <Avatar 
+                  size="small" 
+                  icon={<UserOutlined />} 
+                  style={{ backgroundColor: '#1890ff' }}
+                />
+                <Text style={{ color: '#262626' }}>
+                  {user?.full_name || user?.username || '用户'}
+                </Text>
+              </Space>
+            </div>
           </Dropdown>
         ) : (
           <Space>

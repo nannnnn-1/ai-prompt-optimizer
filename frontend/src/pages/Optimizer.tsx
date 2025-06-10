@@ -1,289 +1,467 @@
-import React, { useState } from 'react';
-import { Card, Input, Button, Row, Col, Typography, Space, Divider, message, Spin } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  SendOutlined, 
-  ClearOutlined, 
+  Row, 
+  Col, 
+  Card, 
+  Typography, 
+  Input, 
+  Button, 
+  Select, 
+  Radio, 
+  message, 
+  Spin, 
+  Tag,
+  Progress,
+  Space,
+  Tooltip,
+  Modal
+} from 'antd';
+import { 
+  BulbOutlined, 
+  ThunderboltOutlined, 
   CopyOutlined, 
-  StarOutlined,
-  BulbOutlined,
-  CheckCircleOutlined
+  ClearOutlined,
+  HistoryOutlined,
+  SaveOutlined,
+  ShareAltOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons';
+import { useUIStore } from '../store/uiStore';
+import { optimizerService } from '../services/optimizerService';
+import type { 
+  OptimizationRequest, 
+  OptimizationResult, 
+  QualityEvaluation,
+  Improvement 
+} from '../services/optimizerService';
 
+const { Title, Text } = Typography;
 const { TextArea } = Input;
-const { Title, Text, Paragraph } = Typography;
-
-interface OptimizationResult {
-  optimizedPrompt: string;
-  qualityScore: number;
-  improvements: string[];
-  suggestions: string[];
-}
+const { Option } = Select;
 
 export const Optimizer: React.FC = () => {
+  // 状态管理
   const [originalPrompt, setOriginalPrompt] = useState('');
-  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
-  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizedPrompt, setOptimizedPrompt] = useState('');
+  const [optimizationType, setOptimizationType] = useState<'general' | 'code' | 'writing' | 'analysis'>('general');
+  const [userContext, setUserContext] = useState('');
+  const [currentResult, setCurrentResult] = useState<OptimizationResult | null>(null);
+  const [qualityEvaluation, setQualityEvaluation] = useState<QualityEvaluation | null>(null);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
 
-  const handleOptimize = async () => {
+  // UI状态
+  const { loading, setModal, addNotification } = useUIStore();
+  const isOptimizing = loading.optimize;
+  const isEvaluating = loading.load;
+
+  // 自动保存定时器
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // 优化处理
+  const handleOptimize = useCallback(async () => {
     if (!originalPrompt.trim()) {
-      message.warning('请输入要优化的提示词');
+      addNotification({
+        type: 'warning',
+        title: '请输入提示词',
+        message: '请先输入需要优化的提示词内容',
+      });
       return;
     }
 
-    setIsOptimizing(true);
-    
     try {
-      // 模拟API调用 - 后续将连接真实后端
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // 模拟优化结果
-      const mockResult: OptimizationResult = {
-        optimizedPrompt: `优化后的提示词：\n\n请作为一个专业的AI助手，帮助我${originalPrompt}。\n\n要求：\n1. 请提供详细的步骤说明\n2. 确保回答准确可靠\n3. 如有疑问请及时询问\n4. 提供相关的最佳实践建议\n\n请按照以上要求进行回应。`,
-        qualityScore: 85,
-        improvements: [
-          '添加了角色定义，明确了AI助手的身份',
-          '增加了具体的要求和约束条件',
-          '优化了语言表达，更加清晰明确',
-          '添加了输出格式的指导'
-        ],
-        suggestions: [
-          '可以进一步添加具体的使用场景',
-          '考虑添加输出长度的限制',
-          '可以指定回答的语言风格'
-        ]
+      const request: OptimizationRequest = {
+        original_prompt: originalPrompt,
+        optimization_type: optimizationType,
+        user_context: userContext || undefined,
       };
-      
-      setOptimizationResult(mockResult);
-      message.success('提示词优化完成！');
-      
+
+      const result = await optimizerService.optimizePrompt(request);
+      setCurrentResult(result);
+      setOptimizedPrompt(result.optimized_prompt);
+
+      // 同时获取质量评估
+      const evaluation = await optimizerService.evaluateQuality(result.optimized_prompt);
+      setQualityEvaluation(evaluation);
+
     } catch (error) {
-      message.error('优化失败，请重试');
-      console.error('Optimization error:', error);
-    } finally {
-      setIsOptimizing(false);
+      console.error('Optimization failed:', error);
     }
-  };
+  }, [originalPrompt, optimizationType, userContext, addNotification]);
 
-  const handleClear = () => {
-    setOriginalPrompt('');
-    setOptimizationResult(null);
-  };
+  // 清空内容
+  const handleClear = useCallback(() => {
+    Modal.confirm({
+      title: '确认清空',
+      content: '确定要清空所有内容吗？此操作不可撤销。',
+      onOk: () => {
+        setOriginalPrompt('');
+        setOptimizedPrompt('');
+        setUserContext('');
+        setCurrentResult(null);
+        setQualityEvaluation(null);
+      },
+    });
+  }, []);
 
-  const handleCopy = async (text: string) => {
+  // 复制内容
+  const handleCopy = useCallback(async (text: string) => {
+    await optimizerService.copyToClipboard(text);
+  }, []);
+
+  // 保存结果
+  const handleSave = useCallback(async () => {
+    if (!currentResult) {
+      addNotification({
+        type: 'warning',
+        title: '没有可保存的内容',
+        message: '请先进行提示词优化',
+      });
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(text);
-      message.success('已复制到剪贴板');
+      await optimizerService.saveOptimization({
+        optimization_id: currentResult.id,
+        is_favorite: true,
+      });
     } catch (error) {
-      message.error('复制失败');
+      console.error('Save failed:', error);
     }
+  }, [currentResult, addNotification]);
+
+  // 分享结果
+  const handleShare = useCallback(async () => {
+    if (!currentResult) {
+      addNotification({
+        type: 'warning',
+        title: '没有可分享的内容',
+        message: '请先进行提示词优化',
+      });
+      return;
+    }
+
+    try {
+      await optimizerService.shareOptimization(currentResult.id);
+    } catch (error) {
+      console.error('Share failed:', error);
+    }
+  }, [currentResult, addNotification]);
+
+  // 自动保存草稿
+  const handlePromptChange = useCallback((value: string) => {
+    setOriginalPrompt(value);
+    
+    // 清除之前的定时器
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+    
+    // 设置新的自动保存定时器
+    const timer = setTimeout(() => {
+      localStorage.setItem('prompt_draft', value);
+    }, 1000);
+    
+    setAutoSaveTimer(timer);
+  }, [autoSaveTimer]);
+
+  // 组件挂载时恢复草稿
+  useEffect(() => {
+    const draft = localStorage.getItem('prompt_draft');
+    if (draft) {
+      setOriginalPrompt(draft);
+    }
+    
+    // 清理定时器
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+    };
+  }, []);
+
+  // 渲染改进点
+  const renderImprovements = (improvements: Improvement[]) => {
+    const impactColors = {
+      high: 'red',
+      medium: 'orange',
+      low: 'green',
+    };
+
+    return improvements.map((improvement, index) => (
+      <div key={improvement.id} style={{ marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+          <Text strong>{index + 1}. {improvement.category}</Text>
+          <Tag 
+            color={impactColors[improvement.impact]} 
+            style={{ marginLeft: '8px' }}
+          >
+            {improvement.impact.toUpperCase()}
+          </Tag>
+        </div>
+        <Text type="secondary">{improvement.description}</Text>
+        {improvement.before_text && improvement.after_text && (
+          <div style={{ marginTop: '8px', fontSize: '12px' }}>
+            <div>
+              <Text type="secondary">优化前：</Text>
+              <Text code>{improvement.before_text}</Text>
+            </div>
+            <div style={{ marginTop: '4px' }}>
+              <Text type="secondary">优化后：</Text>
+              <Text code>{improvement.after_text}</Text>
+            </div>
+          </div>
+        )}
+      </div>
+    ));
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <Title level={2} className="mb-2">
-          <BulbOutlined className="mr-2 text-primary-500" />
-          AI提示词优化器
-        </Title>
-        <Text type="secondary" className="text-base">
-          输入您的提示词，我们将帮助您优化提示词的质量和效果
-        </Text>
-      </div>
-
+    <div style={{ padding: '24px', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       <Row gutter={[24, 24]}>
-        {/* 左侧：原始提示词输入 */}
+        {/* 左侧输入区域 */}
         <Col xs={24} lg={12}>
           <Card 
             title={
               <Space>
-                <span>📝 原始提示词</span>
-                <Text type="secondary" className="text-sm">
-                  ({originalPrompt.length}/2000)
-                </Text>
+                <BulbOutlined />
+                原始提示词
               </Space>
             }
-            className="h-full"
+            extra={
+              <Tooltip title="查看优化建议">
+                <Button 
+                  type="text" 
+                  icon={<QuestionCircleOutlined />}
+                  onClick={() => setHelpModalVisible(true)}
+                />
+              </Tooltip>
+            }
           >
-            <div className="space-y-4">
+            <div style={{ marginBottom: '16px' }}>
               <TextArea
                 value={originalPrompt}
-                onChange={(e) => setOriginalPrompt(e.target.value)}
-                placeholder="请输入您想要优化的提示词...
-
-示例：
-- 帮我写一篇关于AI的文章
-- 解释什么是机器学习
-- 写一个Python函数来计算斐波那契数列"
-                rows={12}
-                maxLength={2000}
+                onChange={(e) => handlePromptChange(e.target.value)}
+                placeholder="请输入您需要优化的提示词..."
+                autoSize={{ minRows: 8, maxRows: 15 }}
+                maxLength={5000}
                 showCount
-                className="resize-none"
+                style={{ marginBottom: '16px' }}
               />
-              
-              <div className="flex justify-between">
-                <Button 
-                  icon={<ClearOutlined />}
-                  onClick={handleClear}
-                  disabled={!originalPrompt && !optimizationResult}
-                >
-                  清空
-                </Button>
-                
-                <Button 
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={handleOptimize}
-                  loading={isOptimizing}
-                  disabled={!originalPrompt.trim()}
-                  size="large"
-                >
-                  {isOptimizing ? '优化中...' : '开始优化'}
-                </Button>
-              </div>
             </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <Text strong>优化类型：</Text>
+              <Radio.Group 
+                value={optimizationType} 
+                onChange={(e) => setOptimizationType(e.target.value)}
+                style={{ marginTop: '8px' }}
+              >
+                <Radio.Button value="general">通用优化</Radio.Button>
+                <Radio.Button value="code">代码相关</Radio.Button>
+                <Radio.Button value="writing">写作优化</Radio.Button>
+                <Radio.Button value="analysis">分析任务</Radio.Button>
+              </Radio.Group>
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <Text strong>使用场景 (可选)：</Text>
+              <TextArea
+                value={userContext}
+                onChange={(e) => setUserContext(e.target.value)}
+                placeholder="请描述使用场景，帮助我们更好地优化..."
+                autoSize={{ minRows: 2, maxRows: 4 }}
+                maxLength={500}
+                showCount
+                style={{ marginTop: '8px' }}
+              />
+            </div>
+
+            <Space>
+              <Button
+                type="primary"
+                icon={<ThunderboltOutlined />}
+                onClick={handleOptimize}
+                loading={isOptimizing}
+                disabled={!originalPrompt.trim()}
+                size="large"
+              >
+                {isOptimizing ? '优化中...' : '开始优化'}
+              </Button>
+              
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleClear}
+                disabled={isOptimizing}
+              >
+                清空
+              </Button>
+              
+              <Button
+                icon={<HistoryOutlined />}
+                onClick={() => window.open('/history', '_blank')}
+              >
+                历史记录
+              </Button>
+            </Space>
           </Card>
         </Col>
 
-        {/* 右侧：优化结果展示 */}
+        {/* 右侧结果区域 */}
         <Col xs={24} lg={12}>
           <Card 
-            title="✨ 优化结果"
-            className="h-full"
+            title={
+              <Space>
+                <ThunderboltOutlined />
+                优化结果
+              </Space>
+            }
+            extra={
+              optimizedPrompt && (
+                <Space>
+                  <Tooltip title="复制优化后的提示词">
+                    <Button 
+                      icon={<CopyOutlined />} 
+                      onClick={() => handleCopy(optimizedPrompt)}
+                    />
+                  </Tooltip>
+                  <Tooltip title="保存到收藏夹">
+                    <Button 
+                      icon={<SaveOutlined />} 
+                      onClick={handleSave}
+                      loading={loading.save}
+                    />
+                  </Tooltip>
+                  <Tooltip title="分享结果">
+                    <Button 
+                      icon={<ShareAltOutlined />} 
+                      onClick={handleShare}
+                    />
+                  </Tooltip>
+                </Space>
+              )
+            }
           >
             {isOptimizing ? (
-              <div className="flex flex-col items-center justify-center py-16">
+              <div style={{ textAlign: 'center', padding: '60px 0' }}>
                 <Spin size="large" />
-                <Text className="mt-4 text-gray-500">
-                  AI正在分析和优化您的提示词...
-                </Text>
+                <div style={{ marginTop: '16px' }}>
+                  <Text>正在分析和优化您的提示词...</Text>
+                </div>
               </div>
-            ) : optimizationResult ? (
-              <div className="space-y-6">
-                {/* 质量评分 */}
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <Text strong>质量评分</Text>
-                    <div className="flex items-center">
-                      <StarOutlined className="text-yellow-500 mr-1" />
-                      <Text strong className="text-lg">
-                        {optimizationResult.qualityScore}/100
-                      </Text>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${optimizationResult.qualityScore}%` }}
-                    />
-                  </div>
+            ) : optimizedPrompt ? (
+              <>
+                <div style={{ marginBottom: '24px' }}>
+                  <TextArea
+                    value={optimizedPrompt}
+                    readOnly
+                    autoSize={{ minRows: 8, maxRows: 15 }}
+                    style={{ 
+                      backgroundColor: '#f8f9fa',
+                      border: '2px solid #52c41a'
+                    }}
+                  />
                 </div>
 
-                {/* 优化后的提示词 */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <Text strong>优化后的提示词</Text>
-                    <Button 
-                      size="small" 
-                      icon={<CopyOutlined />}
-                      onClick={() => handleCopy(optimizationResult.optimizedPrompt)}
-                    >
-                      复制
-                    </Button>
+                {/* 质量评分 */}
+                {qualityEvaluation && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <Title level={5}>质量评分</Title>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <div style={{ textAlign: 'center' }}>
+                          <Progress
+                            type="circle"
+                            percent={qualityEvaluation.overall_score * 10}
+                            format={() => qualityEvaluation.overall_score}
+                            strokeColor="#52c41a"
+                            size={100}
+                          />
+                          <div style={{ marginTop: '8px' }}>
+                            <Text strong>综合评分</Text>
+                          </div>
+                        </div>
+                      </Col>
+                      <Col span={12}>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ 
+                            fontSize: '48px', 
+                            fontWeight: 'bold',
+                            color: qualityEvaluation.grade === 'A' ? '#52c41a' : 
+                                   qualityEvaluation.grade === 'B' ? '#faad14' : '#ff4d4f'
+                          }}>
+                            {qualityEvaluation.grade}
+                          </div>
+                          <Text strong>等级</Text>
+                        </div>
+                      </Col>
+                    </Row>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg border">
-                    <Paragraph className="mb-0 whitespace-pre-wrap">
-                      {optimizationResult.optimizedPrompt}
-                    </Paragraph>
-                  </div>
-                </div>
+                )}
 
                 {/* 改进点 */}
-                <div>
-                  <Text strong className="block mb-3">
-                    <CheckCircleOutlined className="text-green-500 mr-2" />
-                    主要改进点
-                  </Text>
-                  <ul className="space-y-2">
-                    {optimizationResult.improvements.map((improvement, index) => (
-                      <li key={index} className="flex items-start">
-                        <div className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-3 flex-shrink-0" />
-                        <Text className="text-sm">{improvement}</Text>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* 优化建议 */}
-                <div>
-                  <Text strong className="block mb-3">
-                    <BulbOutlined className="text-blue-500 mr-2" />
-                    进一步建议
-                  </Text>
-                  <ul className="space-y-2">
-                    {optimizationResult.suggestions.map((suggestion, index) => (
-                      <li key={index} className="flex items-start">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0" />
-                        <Text className="text-sm">{suggestion}</Text>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+                {currentResult?.improvements && currentResult.improvements.length > 0 && (
+                  <div>
+                    <Title level={5}>改进点说明</Title>
+                    <div style={{ 
+                      maxHeight: '300px', 
+                      overflowY: 'auto',
+                      padding: '12px',
+                      backgroundColor: '#fafafa',
+                      borderRadius: '6px'
+                    }}>
+                      {renderImprovements(currentResult.improvements)}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <BulbOutlined className="text-2xl text-gray-400" />
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '60px 0',
+                color: '#999'
+              }}>
+                <BulbOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
+                <div>
+                  <Text type="secondary">输入提示词并点击"开始优化"查看结果</Text>
                 </div>
-                <Text className="text-gray-500 mb-2">
-                  优化结果将在这里显示
-                </Text>
-                <Text type="secondary" className="text-sm">
-                  请先在左侧输入您的提示词，然后点击"开始优化"
-                </Text>
               </div>
             )}
           </Card>
         </Col>
       </Row>
 
-      {/* 使用提示 */}
-      <Card className="mt-6" title="💡 使用提示">
-        <Row gutter={[16, 16]}>
-          <Col span={8}>
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-blue-600 font-bold">1</span>
-              </div>
-              <Text strong className="block mb-2">输入提示词</Text>
-              <Text type="secondary" className="text-sm">
-                在左侧文本框中输入您想要优化的提示词
-              </Text>
-            </div>
-          </Col>
-          <Col span={8}>
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-green-600 font-bold">2</span>
-              </div>
-              <Text strong className="block mb-2">AI智能优化</Text>
-              <Text type="secondary" className="text-sm">
-                点击"开始优化"，AI将分析并改进您的提示词
-              </Text>
-            </div>
-          </Col>
-          <Col span={8}>
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-purple-600 font-bold">3</span>
-              </div>
-              <Text strong className="block mb-2">查看结果</Text>
-              <Text type="secondary" className="text-sm">
-                查看优化后的提示词和详细的改进建议
-              </Text>
-            </div>
-          </Col>
-        </Row>
-      </Card>
+      {/* 帮助模态框 */}
+      <Modal
+        title="优化建议"
+        open={helpModalVisible}
+        onCancel={() => setHelpModalVisible(false)}
+        footer={null}
+        width={600}
+      >
+        <div>
+          <Title level={5}>如何编写更好的提示词？</Title>
+          <div style={{ marginBottom: '16px' }}>
+            <Text strong>1. 明确目标：</Text>
+            <Text>清楚地说明你希望AI完成什么任务</Text>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <Text strong>2. 提供上下文：</Text>
+            <Text>给出必要的背景信息和约束条件</Text>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <Text strong>3. 具体化要求：</Text>
+            <Text>避免模糊的描述，使用具体的例子</Text>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <Text strong>4. 设定格式：</Text>
+            <Text>指定输出的格式和结构</Text>
+          </div>
+          <div>
+            <Text strong>5. 迭代优化：</Text>
+            <Text>根据结果不断调整和完善提示词</Text>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

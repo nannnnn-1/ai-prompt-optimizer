@@ -1,21 +1,51 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, App as AntApp } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { MainLayout } from './components/layout/MainLayout';
 import { Login } from './pages/Login';
 import Register from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { Optimizer } from './pages/Optimizer';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { NotificationProvider } from './components/common/NotificationProvider';
 import { useAuthStore } from './store/authStore';
 import { ROUTES } from './constants';
 
-// 主题配置
+// 主题配置 - 现代化设计
 const theme = {
   token: {
     colorPrimary: '#1890ff',
+    colorSuccess: '#52c41a',
+    colorWarning: '#faad14',
+    colorError: '#ff4d4f',
     borderRadius: 8,
     colorBgContainer: '#ffffff',
+    colorBgLayout: '#f5f5f5',
+    fontSize: 14,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    colorBorder: '#e8e8e8',
+    colorTextSecondary: '#666666',
+    colorTextPlaceholder: '#999999',
+  },
+  components: {
+    Layout: {
+      bodyBg: '#f5f5f5',
+      headerBg: '#ffffff',
+      siderBg: '#001529',
+    },
+    Button: {
+      borderRadius: 6,
+      controlHeight: 36,
+    },
+    Input: {
+      borderRadius: 6,
+      controlHeight: 36,
+    },
+    Card: {
+      borderRadius: 8,
+    },
   },
 };
 
@@ -44,8 +74,9 @@ export default function App() {
 
   return (
     <ConfigProvider locale={zhCN} theme={theme}>
-      <Router>
-        <Routes>
+      <AntApp>
+        <Router>
+          <Routes>
           {/* 公共路由 */}
           <Route 
             path={ROUTES.LOGIN} 
@@ -136,6 +167,7 @@ export default function App() {
           <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
         </Routes>
       </Router>
+        </AntApp>
     </ConfigProvider>
   );
 }
