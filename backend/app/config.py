@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # 应用配置
     DEBUG: bool = True
     SECRET_KEY: str = "dev-secret-key-change-in-production"
-    ALLOWED_HOSTS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "*"]
+    ALLOWED_HOSTS: List[str] = ["http://localhost:5174", "http://127.0.0.1:5174", "*"]
     
     # 数据库配置
     DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"

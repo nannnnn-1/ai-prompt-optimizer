@@ -34,7 +34,7 @@ class ApiClient {
       }
     );
 
-    // 响应拦截器 - 简化版本
+    // 响应拦截器
     this.client.interceptors.response.use(
       (response) => {
         console.log('API Response:', response.status, response.config.url);

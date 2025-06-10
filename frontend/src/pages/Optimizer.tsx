@@ -32,8 +32,8 @@ import type {
   OptimizationRequest, 
   OptimizationResult, 
   QualityEvaluation,
-  Improvement 
-} from '../services/optimizerService';
+  OptimizationImprovement 
+} from '../types';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -50,7 +50,7 @@ export const Optimizer: React.FC = () => {
   const [helpModalVisible, setHelpModalVisible] = useState(false);
 
   // UI状态
-  const { loading, setModal, addNotification } = useUIStore();
+  const { loading, setLoading, setModal, addNotification } = useUIStore();
   const isOptimizing = loading.optimize;
   const isEvaluating = loading.load;
 
@@ -68,6 +68,8 @@ export const Optimizer: React.FC = () => {
       return;
     }
 
+    setLoading('optimize', true);
+    
     try {
       const request: OptimizationRequest = {
         original_prompt: originalPrompt,
@@ -75,18 +77,43 @@ export const Optimizer: React.FC = () => {
         user_context: userContext || undefined,
       };
 
+      // 执行优化
       const result = await optimizerService.optimizePrompt(request);
+      
+      // 设置结果
       setCurrentResult(result);
       setOptimizedPrompt(result.optimized_prompt);
 
-      // 同时获取质量评估
-      const evaluation = await optimizerService.evaluateQuality(result.optimized_prompt);
-      setQualityEvaluation(evaluation);
+      // 成功通知
+      addNotification({
+        type: 'success',
+        title: '优化完成',
+        message: `质量评分从 ${result.quality_score_before} 提升到 ${result.quality_score_after}`,
+      });
+
+      // 异步获取质量评估（不阻塞主流程）
+      if (result.optimized_prompt) {
+        optimizerService.evaluateQuality(result.optimized_prompt)
+          .then(evaluation => {
+            setQualityEvaluation(evaluation);
+          })
+          .catch(error => {
+            console.warn('质量评估失败:', error);
+            // 质量评估失败不影响主流程
+          });
+      }
 
     } catch (error) {
-      console.error('Optimization failed:', error);
+      console.error('优化失败:', error);
+      addNotification({
+        type: 'error',
+        title: '优化失败',
+        message: (error as any)?.message || '优化过程中发生错误，请稍后重试',
+      });
+    } finally {
+      setLoading('optimize', false);
     }
-  }, [originalPrompt, optimizationType, userContext, addNotification]);
+  }, [originalPrompt, optimizationType, userContext, setLoading, addNotification]);
 
   // 清空内容
   const handleClear = useCallback(() => {
@@ -103,47 +130,68 @@ export const Optimizer: React.FC = () => {
     });
   }, []);
 
-  // 复制内容
-  const handleCopy = useCallback(async (text: string) => {
-    await optimizerService.copyToClipboard(text);
-  }, []);
+  // 复制优化结果
+  const handleCopy = useCallback(async () => {
+    if (!currentResult?.optimized_prompt) return;
+    
+    try {
+      await navigator.clipboard.writeText(currentResult.optimized_prompt);
+      addNotification({
+        type: 'success',
+        title: '复制成功',
+        message: '优化后的提示词已复制到剪贴板',
+      });
+    } catch (error) {
+      console.error('复制失败:', error);
+      addNotification({
+        type: 'error',
+        title: '复制失败',
+        message: '无法复制到剪贴板，请手动复制',
+      });
+    }
+  }, [currentResult, addNotification]);
 
   // 保存结果
   const handleSave = useCallback(async () => {
-    if (!currentResult) {
-      addNotification({
-        type: 'warning',
-        title: '没有可保存的内容',
-        message: '请先进行提示词优化',
-      });
-      return;
-    }
-
+    if (!currentResult) return;
+    
     try {
-      await optimizerService.saveOptimization({
-        optimization_id: currentResult.id,
-        is_favorite: true,
+      // TODO: 实现保存功能
+      console.log('保存功能待实现:', currentResult);
+      addNotification({
+        type: 'info',
+        title: '保存功能',
+        message: '保存功能正在开发中',
       });
     } catch (error) {
-      console.error('Save failed:', error);
+      console.error('保存失败:', error);
+      addNotification({
+        type: 'error',
+        title: '保存失败',
+        message: '保存失败，请稍后重试',
+      });
     }
   }, [currentResult, addNotification]);
 
   // 分享结果
   const handleShare = useCallback(async () => {
-    if (!currentResult) {
-      addNotification({
-        type: 'warning',
-        title: '没有可分享的内容',
-        message: '请先进行提示词优化',
-      });
-      return;
-    }
-
+    if (!currentResult) return;
+    
     try {
-      await optimizerService.shareOptimization(currentResult.id);
+      // TODO: 实现分享功能
+      console.log('分享功能待实现:', currentResult);
+      addNotification({
+        type: 'info',
+        title: '分享功能',
+        message: '分享功能正在开发中',
+      });
     } catch (error) {
-      console.error('Share failed:', error);
+      console.error('分享失败:', error);
+      addNotification({
+        type: 'error',
+        title: '分享失败',
+        message: '分享失败，请稍后重试',
+      });
     }
   }, [currentResult, addNotification]);
 
@@ -180,22 +228,17 @@ export const Optimizer: React.FC = () => {
   }, []);
 
   // 渲染改进点
-  const renderImprovements = (improvements: Improvement[]) => {
-    const impactColors = {
-      high: 'red',
-      medium: 'orange',
-      low: 'green',
-    };
+  const renderImprovements = (improvements: OptimizationImprovement[]) => {
+    if (!improvements || improvements.length === 0) {
+      return <Text type="secondary">暂无改进点信息</Text>;
+    }
 
     return improvements.map((improvement, index) => (
-      <div key={improvement.id} style={{ marginBottom: '12px' }}>
+      <div key={`improvement-${index}`} style={{ marginBottom: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-          <Text strong>{index + 1}. {improvement.category}</Text>
-          <Tag 
-            color={impactColors[improvement.impact]} 
-            style={{ marginLeft: '8px' }}
-          >
-            {improvement.impact.toUpperCase()}
+          <Text strong>{index + 1}. {improvement.type}</Text>
+          <Tag color="blue" style={{ marginLeft: '8px' }}>
+            改进
           </Tag>
         </div>
         <Text type="secondary">{improvement.description}</Text>
@@ -316,12 +359,12 @@ export const Optimizer: React.FC = () => {
               </Space>
             }
             extra={
-              optimizedPrompt && (
+              currentResult && (
                 <Space>
                   <Tooltip title="复制优化后的提示词">
                     <Button 
                       icon={<CopyOutlined />} 
-                      onClick={() => handleCopy(optimizedPrompt)}
+                      onClick={handleCopy}
                     />
                   </Tooltip>
                   <Tooltip title="保存到收藏夹">
@@ -383,14 +426,22 @@ export const Optimizer: React.FC = () => {
                       </Col>
                       <Col span={12}>
                         <div style={{ textAlign: 'center' }}>
-                          <div style={{ 
-                            fontSize: '48px', 
-                            fontWeight: 'bold',
-                            color: qualityEvaluation.grade === 'A' ? '#52c41a' : 
-                                   qualityEvaluation.grade === 'B' ? '#faad14' : '#ff4d4f'
-                          }}>
-                            {qualityEvaluation.grade}
-                          </div>
+                          {(() => {
+                            const score = qualityEvaluation.overall_score;
+                            const grade = score >= 9 ? 'A' : score >= 7 ? 'B' : score >= 5 ? 'C' : 'D';
+                            const color = grade === 'A' ? '#52c41a' : 
+                                         grade === 'B' ? '#faad14' : 
+                                         grade === 'C' ? '#fa8c16' : '#ff4d4f';
+                            return (
+                              <div style={{ 
+                                fontSize: '48px', 
+                                fontWeight: 'bold',
+                                color: color
+                              }}>
+                                {grade}
+                              </div>
+                            );
+                          })()}
                           <Text strong>等级</Text>
                         </div>
                       </Col>

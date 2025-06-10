@@ -53,8 +53,13 @@ export interface OptimizationRequest {
 export interface OptimizationImprovement {
   type: string;
   description: string;
-  before_text?: string;
-  after_text?: string;
+}
+
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost_estimate: number;
 }
 
 export interface OptimizationResult {
@@ -63,8 +68,10 @@ export interface OptimizationResult {
   optimized_prompt: string;
   quality_score_before: number;
   quality_score_after: number;
+  optimization_type: string;
   improvements: OptimizationImprovement[];
   processing_time: number;
+  token_usage: TokenUsage;
   created_at: string;
 }
 
@@ -79,6 +86,7 @@ export interface QualityEvaluation {
   };
   issues: string[];
   suggestions: string[];
+  processing_time: number;
 }
 
 // UI状态类型
