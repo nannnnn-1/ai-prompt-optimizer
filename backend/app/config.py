@@ -19,9 +19,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
     DATABASE_URL_SYNC: str = "sqlite:///./app.db"
     
-    # AI服务配置
+    # AI服务配置 - 支持硅基流动qwen模型
     OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_BASE_URL: str = "https://api.siliconflow.cn/v1"
+    OPENAI_MODEL: str = "Qwen/Qwen2.5-7B-Instruct"
     OPENAI_MAX_TOKENS: int = 4000
     OPENAI_TEMPERATURE: float = 0.7
     
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"  # 指定编码格式
         case_sensitive = True
         extra = "ignore"
 

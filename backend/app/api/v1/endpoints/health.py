@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from datetime import datetime
 from typing import Dict, Any
-from app.dependencies import get_db
+from app.core.dependencies import get_db
 from app.config import settings
 
 router = APIRouter()

@@ -81,4 +81,14 @@ class AuthorizationException(PromptOptimizerException):
         super().__init__(
             message=message,
             error_code="AUTHORIZATION_ERROR"
-        ) 
+        )
+
+
+class OptimizationFailedException(PromptOptimizerException):
+    """优化失败异常"""
+    pass
+
+
+class ResourceNotFoundException(PromptOptimizerException):
+    """资源未找到异常"""
+    pass 

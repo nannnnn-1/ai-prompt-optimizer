@@ -47,6 +47,11 @@ class User(BaseModel):
         default=False, 
         comment="是否超级用户"
     )
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, 
+        default=False, 
+        comment="是否管理员"
+    )
     
     # 用户详细信息
     full_name: Mapped[Optional[str]] = mapped_column(
@@ -83,11 +88,12 @@ class User(BaseModel):
     )
     
     # 关系映射
-    # optimizations: Mapped[List["Optimization"]] = relationship(
-    #     back_populates="user", 
-    #     cascade="all, delete-orphan",
-    #     lazy="selectin"
-    # )
+    optimizations: Mapped[List["Optimization"]] = relationship(
+        "Optimization",
+        back_populates="user", 
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
     login_history: Mapped[List["LoginHistory"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
