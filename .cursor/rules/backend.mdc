@@ -1,0 +1,1062 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# AI提示词优化器 - 后端项目设计文档
+
+## 📋 文档概述
+
+本文档详细描述了AI提示词优化器后端项目的技术架构、API设计、数据库结构和开发规范，基于Python + FastAPI技术栈构建高性能、可扩展的后端服务。
+
+---
+
+## 🛠 技术栈选择
+
+### 核心技术栈
+
+#### 1. **FastAPI 框架**
+```python
+fastapi = "^0.104.1"
+uvicorn = "^0.24.0"
+pydantic = "^2.5.0"
+```
+
+**选择理由**：
+- 高性能异步框架，支持并发处理
+- 自动生成OpenAPI文档
+- 原生支持类型提示和数据验证
+- 现代化的开发体验
+
+#### 2. **数据库技术栈**
+```python
+sqlalchemy = "^2.0.23"
+alembic = "^1.13.0"
+asyncpg = "^0.29.0"
+aiosqlite = "^0.19.0"
+```
+
+**数据库选择**：
+- **开发环境**：SQLite (轻量级，易于开发)
+- **生产环境**：PostgreSQL (稳定可靠，功能强大)
+
+#### 3. **AI服务集成**
+```python
+openai = "^1.3.0"
+httpx = "^0.25.0"
+tiktoken = "^0.5.0"
+```
+
+#### 4. **认证和安全**
+```python
+python-jose = "^3.3.0"
+passlib = "^1.7.4"
+python-multipart = "^0.0.6"
+bcrypt = "^4.1.0"
+```
+
+#### 5. **工具和中间件**
+```python
+redis = "^5.0.0"
+celery = "^5.3.0"
+python-dotenv = "^1.0.0"
+loguru = "^0.7.0"
+```
+
+#### 6. **开发和测试工具**
+```python
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+black = "^23.0.0"
+isort = "^5.12.0"
+flake8 = "^6.0.0"
+mypy = "^1.7.0"
+```
+
+---
+
+## 🏗 项目文件结构
+
+### 整体目录结构
+```
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI应用入口
+│   ├── config.py            # 配置管理
+│   ├── database.py          # 数据库连接
+│   ├── dependencies.py      # 依赖注入
+│   │
+│   ├── api/                 # API路由
+│   │   ├── __init__.py
+│   │   ├── router.py        # 主路由
+│   │   └── v1/             # API版本1
+│   │       ├── __init__.py
+│   │       ├── auth.py      # 认证相关
+│   │       ├── optimizer.py # 优化接口
+│   │       ├── history.py   # 历史记录
+│   │       ├── examples.py  # 案例库
+│   │       └── users.py     # 用户管理
+│   │
+│   ├── core/               # 核心业务逻辑
+│   │   ├── __init__.py
+│   │   ├── prompt_optimizer.py  # 提示词优化器
+│   │   ├── quality_evaluator.py # 质量评估器
+│   │   ├── ai_client.py         # AI服务客户端
+│   │   └── prompt_analyzer.py   # 提示词分析器
+│   │
+│   ├── models/             # 数据模型
+│   │   ├── __init__.py
+│   │   ├── base.py         # 基础模型
+│   │   ├── user.py         # 用户模型
+│   │   ├── optimization.py # 优化记录模型
+│   │   └── example.py      # 案例模型
+│   │
+│   ├── schemas/            # Pydantic模式
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── optimization.py
+│   │   ├── example.py
+│   │   └── common.py       # 通用模式
+│   │
+│   ├── services/           # 业务服务层
+│   │   ├── __init__.py
+│   │   ├── auth_service.py
+│   │   ├── optimizer_service.py
+│   │   ├── history_service.py
+│   │   └── example_service.py
+│   │
+│   ├── utils/              # 工具函数
+│   │   ├── __init__.py
+│   │   ├── security.py     # 安全工具
+│   │   ├── validators.py   # 验证器
+│   │   ├── exceptions.py   # 自定义异常
+│   │   └── helpers.py      # 辅助函数
+│   │
+│   └── middleware/         # 中间件
+│       ├── __init__.py
+│       ├── cors.py         # 跨域处理
+│       ├── auth.py         # 认证中间件
+│       └── logging.py      # 日志中间件
+│
+├── migrations/             # 数据库迁移
+│   └── versions/
+│
+├── tests/                  # 测试代码
+│   ├── __init__.py
+│   ├── conftest.py         # 测试配置
+│   ├── test_api/           # API测试
+│   ├── test_core/          # 核心逻辑测试
+│   └── test_services/      # 服务层测试
+│
+├── scripts/                # 脚本文件
+│   ├── init_db.py         # 数据库初始化
+│   └── seed_data.py       # 测试数据
+│
+├── requirements.txt        # 依赖列表
+├── pyproject.toml         # 项目配置
+├── Dockerfile             # Docker配置
+├── docker-compose.yml     # Docker编排
+└── README.md              # 项目说明
+```
+
+---
+
+## 🔧 核心架构设计
+
+### 分层架构模式
+
+```
+┌─────────────────────┐
+│    API Layer        │  ← FastAPI路由，请求响应处理
+├─────────────────────┤
+│  Service Layer      │  ← 业务逻辑层，协调各个组件
+├─────────────────────┤
+│   Core Layer        │  ← 核心算法，提示词优化逻辑
+├─────────────────────┤
+│   Model Layer       │  ← 数据模型，ORM映射
+├─────────────────────┤
+│ Database Layer      │  ← 数据持久化
+└─────────────────────┘
+```
+
+### 依赖注入设计
+
+```python
+# dependencies.py
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_async_session
+from app.core.ai_client import AIClient
+
+async def get_db_session() -> AsyncSession:
+    async with get_async_session() as session:
+        yield session
+
+def get_ai_client() -> AIClient:
+    return AIClient()
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db_session)
+):
+    # 用户认证逻辑
+    pass
+```
+
+---
+
+## 📊 数据库设计
+
+### 数据模型设计
+
+#### 1. **用户表 (users)**
+```python
+class User(Base):
+    __tablename__ = "users"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关系
+    optimizations: Mapped[List["Optimization"]] = relationship(back_populates="user")
+```
+
+#### 2. **优化记录表 (optimizations)**
+```python
+class Optimization(Base):
+    __tablename__ = "optimizations"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    original_prompt: Mapped[str] = mapped_column(Text)
+    optimized_prompt: Mapped[str] = mapped_column(Text)
+    quality_score_before: Mapped[int] = mapped_column(nullable=True)
+    quality_score_after: Mapped[int] = mapped_column(nullable=True)
+    optimization_type: Mapped[str] = mapped_column(String(50))
+    ai_model_used: Mapped[str] = mapped_column(String(50))
+    processing_time: Mapped[float] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    
+    # 关系
+    user: Mapped["User"] = relationship(back_populates="optimizations")
+    improvements: Mapped[List["OptimizationImprovement"]] = relationship(back_populates="optimization")
+```
+
+#### 3. **优化改进点表 (optimization_improvements)**
+```python
+class OptimizationImprovement(Base):
+    __tablename__ = "optimization_improvements"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    optimization_id: Mapped[int] = mapped_column(ForeignKey("optimizations.id"))
+    improvement_type: Mapped[str] = mapped_column(String(50))  # structure, clarity, context
+    description: Mapped[str] = mapped_column(Text)
+    before_text: Mapped[str] = mapped_column(Text, nullable=True)
+    after_text: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # 关系
+    optimization: Mapped["Optimization"] = relationship(back_populates="improvements")
+```
+
+#### 4. **案例库表 (examples)**
+```python
+class Example(Base):
+    __tablename__ = "examples"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    category: Mapped[str] = mapped_column(String(50), index=True)
+    original_prompt: Mapped[str] = mapped_column(Text)
+    optimized_prompt: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    tags: Mapped[str] = mapped_column(String(500), nullable=True)  # JSON字符串
+    difficulty_level: Mapped[str] = mapped_column(String(20))  # beginner, intermediate, advanced
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+```
+
+### 数据库连接配置
+
+```python
+# database.py
+import asyncio
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.orm import DeclarativeBase
+
+class Base(DeclarativeBase):
+    pass
+
+class DatabaseManager:
+    def __init__(self, database_url: str):
+        self.engine = create_async_engine(
+            database_url,
+            echo=False,
+            pool_pre_ping=True,
+            pool_recycle=300,
+        )
+        self.async_session_maker = async_sessionmaker(
+            self.engine, 
+            class_=AsyncSession, 
+            expire_on_commit=False
+        )
+    
+    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+        async with self.async_session_maker() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+```
+
+---
+
+## 🚀 API接口设计
+
+### RESTful API规范
+
+#### 1. **提示词优化接口**
+```python
+# api/v1/optimizer.py
+from fastapi import APIRouter, Depends, HTTPException
+from app.schemas.optimization import OptimizationRequest, OptimizationResponse
+from app.services.optimizer_service import OptimizerService
+
+router = APIRouter(prefix="/optimizer", tags=["optimizer"])
+
+@router.post("/optimize", response_model=OptimizationResponse)
+async def optimize_prompt(
+    request: OptimizationRequest,
+    optimizer_service: OptimizerService = Depends(),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    优化提示词
+    
+    Args:
+        request: 优化请求参数
+        optimizer_service: 优化服务
+        current_user: 当前用户
+    
+    Returns:
+        优化结果
+    """
+    try:
+        result = await optimizer_service.optimize_prompt(
+            original_prompt=request.original_prompt,
+            optimization_type=request.optimization_type,
+            user_id=current_user.id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/evaluate", response_model=QualityEvaluationResponse)
+async def evaluate_prompt_quality(
+    request: QualityEvaluationRequest,
+    optimizer_service: OptimizerService = Depends()
+):
+    """评估提示词质量"""
+    return await optimizer_service.evaluate_quality(request.prompt)
+```
+
+#### 2. **历史记录接口**
+```python
+# api/v1/history.py
+@router.get("/", response_model=List[OptimizationHistoryResponse])
+async def get_optimization_history(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    category: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    history_service: HistoryService = Depends()
+):
+    """获取优化历史记录"""
+    return await history_service.get_user_history(
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+        category=category
+    )
+```
+
+### 请求响应模式
+
+```python
+# schemas/optimization.py
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import datetime
+
+class OptimizationRequest(BaseModel):
+    original_prompt: str = Field(..., min_length=1, max_length=10000)
+    optimization_type: str = Field(default="general", regex="^(general|code|writing|analysis)$")
+    user_context: Optional[str] = Field(None, max_length=1000)
+
+class OptimizationImprovement(BaseModel):
+    type: str
+    description: str
+    before_text: Optional[str] = None
+    after_text: Optional[str] = None
+
+class OptimizationResponse(BaseModel):
+    id: int
+    original_prompt: str
+    optimized_prompt: str
+    quality_score_before: int
+    quality_score_after: int
+    improvements: List[OptimizationImprovement]
+    processing_time: float
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+```
+
+---
+
+## 🧠 核心算法设计
+
+### 提示词优化器
+
+```python
+# core/prompt_optimizer.py
+from typing import Dict, List, Any
+from abc import ABC, abstractmethod
+
+class PromptOptimizer(ABC):
+    """提示词优化器基类"""
+    
+    @abstractmethod
+    async def optimize(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        pass
+
+class AIPromptOptimizer(PromptOptimizer):
+    """基于AI的提示词优化器"""
+    
+    def __init__(self, ai_client: AIClient):
+        self.ai_client = ai_client
+        self.optimization_templates = self._load_templates()
+    
+    async def optimize(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        优化提示词
+        
+        Args:
+            prompt: 原始提示词
+            context: 上下文信息
+            
+        Returns:
+            优化结果
+        """
+        # 1. 分析原始提示词
+        analysis = await self._analyze_prompt(prompt)
+        
+        # 2. 确定优化策略
+        strategies = self._determine_strategies(analysis, context)
+        
+        # 3. 应用优化策略
+        optimized_prompt = await self._apply_strategies(prompt, strategies)
+        
+        # 4. 生成改进说明
+        improvements = await self._generate_improvements(prompt, optimized_prompt, strategies)
+        
+        return {
+            "optimized_prompt": optimized_prompt,
+            "improvements": improvements,
+            "strategies_used": strategies
+        }
+    
+    async def _analyze_prompt(self, prompt: str) -> Dict[str, Any]:
+        """分析提示词特征"""
+        analysis_prompt = f"""
+        请分析以下提示词的特征：
+        
+        提示词：{prompt}
+        
+        请从以下维度分析：
+        1. 清晰度 (1-10分)
+        2. 完整性 (1-10分)
+        3. 结构性 (1-10分)
+        4. 具体性 (1-10分)
+        
+        返回JSON格式结果。
+        """
+        
+        response = await self.ai_client.complete(analysis_prompt)
+        return self._parse_analysis_response(response)
+    
+    def _determine_strategies(self, analysis: Dict, context: Dict) -> List[str]:
+        """确定优化策略"""
+        strategies = []
+        
+        if analysis.get("clarity_score", 0) < 7:
+            strategies.append("improve_clarity")
+        
+        if analysis.get("structure_score", 0) < 7:
+            strategies.append("add_structure")
+        
+        if analysis.get("completeness_score", 0) < 7:
+            strategies.append("add_context")
+            
+        if context.get("optimization_type") == "code":
+            strategies.append("add_code_specifics")
+            
+        return strategies
+```
+
+### 质量评估器
+
+```python
+# core/quality_evaluator.py
+class QualityEvaluator:
+    """提示词质量评估器"""
+    
+    def __init__(self, ai_client: AIClient):
+        self.ai_client = ai_client
+        self.evaluation_criteria = {
+            "clarity": "指令是否清晰明确",
+            "completeness": "是否包含必要信息",
+            "structure": "逻辑结构是否清晰",
+            "specificity": "是否足够具体",
+            "actionability": "AI是否能够执行"
+        }
+    
+    async def evaluate(self, prompt: str) -> Dict[str, Any]:
+        """评估提示词质量"""
+        scores = {}
+        issues = []
+        suggestions = []
+        
+        for criterion, description in self.evaluation_criteria.items():
+            score = await self._evaluate_criterion(prompt, criterion, description)
+            scores[criterion] = score
+            
+            if score < 7:
+                issue, suggestion = await self._generate_feedback(prompt, criterion, score)
+                issues.append(issue)
+                suggestions.append(suggestion)
+        
+        overall_score = sum(scores.values()) / len(scores)
+        
+        return {
+            "overall_score": round(overall_score),
+            "detailed_scores": scores,
+            "issues": issues,
+            "suggestions": suggestions
+        }
+```
+
+---
+
+## 🔐 安全性设计
+
+### 认证和授权
+
+```python
+# utils/security.py
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class SecurityManager:
+    def __init__(self, secret_key: str, algorithm: str = "HS256"):
+        self.secret_key = secret_key
+        self.algorithm = algorithm
+        self.access_token_expire_minutes = 30
+    
+    def create_access_token(self, data: dict) -> str:
+        """创建访问令牌"""
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+        to_encode.update({"exp": expire})
+        
+        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+    
+    def verify_token(self, token: str) -> dict:
+        """验证令牌"""
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            return payload
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """密码哈希"""
+        return pwd_context.hash(password)
+    
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        """验证密码"""
+        return pwd_context.verify(plain_password, hashed_password)
+```
+
+### 数据验证和清理
+
+```python
+# utils/validators.py
+import re
+from typing import Any
+from pydantic import validator
+
+class PromptValidator:
+    """提示词验证器"""
+    
+    @staticmethod
+    def validate_prompt_content(prompt: str) -> str:
+        """验证提示词内容"""
+        # 移除危险字符
+        cleaned = re.sub(r'[<>"\']', '', prompt)
+        
+        # 长度检查
+        if len(cleaned) > 10000:
+            raise ValueError("提示词长度不能超过10000字符")
+        
+        if len(cleaned.strip()) < 1:
+            raise ValueError("提示词不能为空")
+        
+        return cleaned.strip()
+    
+    @staticmethod
+    def validate_optimization_type(opt_type: str) -> str:
+        """验证优化类型"""
+        allowed_types = ["general", "code", "writing", "analysis"]
+        if opt_type not in allowed_types:
+            raise ValueError(f"优化类型必须是以下之一: {allowed_types}")
+        return opt_type
+```
+
+---
+
+## 📈 性能优化
+
+### 缓存策略
+
+```python
+# services/cache_service.py
+import redis.asyncio as redis
+import json
+from typing import Any, Optional
+
+class CacheService:
+    """缓存服务"""
+    
+    def __init__(self, redis_url: str):
+        self.redis = redis.from_url(redis_url)
+    
+    async def get(self, key: str) -> Optional[Any]:
+        """获取缓存"""
+        data = await self.redis.get(key)
+        if data:
+            return json.loads(data)
+        return None
+    
+    async def set(self, key: str, value: Any, expire: int = 3600) -> None:
+        """设置缓存"""
+        await self.redis.setex(key, expire, json.dumps(value))
+    
+    async def delete(self, key: str) -> None:
+        """删除缓存"""
+        await self.redis.delete(key)
+    
+    def generate_optimization_cache_key(self, prompt: str, opt_type: str) -> str:
+        """生成优化缓存键"""
+        import hashlib
+        content = f"{prompt}:{opt_type}"
+        return f"optimization:{hashlib.md5(content.encode()).hexdigest()}"
+```
+
+### 异步任务处理
+
+```python
+# core/task_manager.py
+from celery import Celery
+from app.core.prompt_optimizer import AIPromptOptimizer
+
+celery_app = Celery(
+    "prompt_optimizer",
+    broker="redis://localhost:6379/0",
+    backend="redis://localhost:6379/0"
+)
+
+@celery_app.task
+async def optimize_prompt_task(prompt: str, optimization_type: str, user_id: int):
+    """异步优化任务"""
+    optimizer = AIPromptOptimizer()
+    result = await optimizer.optimize(prompt, {"optimization_type": optimization_type})
+    
+    # 保存结果到数据库
+    # ... 数据库操作
+    
+    return result
+```
+
+---
+
+## 🚨 错误处理和日志
+
+### 异常处理
+
+```python
+# utils/exceptions.py
+from fastapi import HTTPException
+
+class PromptOptimizerException(Exception):
+    """基础异常类"""
+    def __init__(self, message: str, error_code: str = None):
+        self.message = message
+        self.error_code = error_code
+        super().__init__(self.message)
+
+class OptimizationFailedException(PromptOptimizerException):
+    """优化失败异常"""
+    pass
+
+class AIServiceException(PromptOptimizerException):
+    """AI服务异常"""
+    pass
+
+class ValidationException(PromptOptimizerException):
+    """验证异常"""
+    pass
+
+# 全局异常处理器
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+async def prompt_optimizer_exception_handler(request: Request, exc: PromptOptimizerException):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": exc.error_code or "UNKNOWN_ERROR",
+            "message": exc.message,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+```
+
+### 日志系统
+
+```python
+# utils/logging.py
+from loguru import logger
+import sys
+from pathlib import Path
+
+def setup_logging():
+    """配置日志系统"""
+    # 移除默认处理器
+    logger.remove()
+    
+    # 控制台日志
+    logger.add(
+        sys.stdout,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level="INFO"
+    )
+    
+    # 文件日志
+    logger.add(
+        "logs/app.log",
+        rotation="1 day",
+        retention="30 days",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+        level="DEBUG"
+    )
+    
+    # 错误日志
+    logger.add(
+        "logs/error.log",
+        level="ERROR",
+        rotation="1 week",
+        retention="3 months"
+    )
+
+# 日志装饰器
+from functools import wraps
+
+def log_execution_time(func):
+    """记录函数执行时间"""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        start_time = time.time()
+        try:
+            result = await func(*args, **kwargs)
+            execution_time = time.time() - start_time
+            logger.info(f"{func.__name__} executed in {execution_time:.2f}s")
+            return result
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"{func.__name__} failed after {execution_time:.2f}s: {str(e)}")
+            raise
+    return wrapper
+```
+
+---
+
+## 🧪 测试策略
+
+### 测试架构
+
+```python
+# tests/conftest.py
+import pytest
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from app.database import Base, DatabaseManager
+from app.main import app
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """创建事件循环"""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+@pytest.fixture
+async def db_session():
+    """测试数据库会话"""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    async with AsyncSession(engine) as session:
+        yield session
+
+@pytest.fixture
+def test_client():
+    """测试客户端"""
+    from fastapi.testclient import TestClient
+    return TestClient(app)
+```
+
+### API测试示例
+
+```python
+# tests/test_api/test_optimizer.py
+import pytest
+from httpx import AsyncClient
+
+@pytest.mark.asyncio
+async def test_optimize_prompt(test_client, mock_ai_client):
+    """测试提示词优化接口"""
+    # 准备测试数据
+    request_data = {
+        "original_prompt": "写个函数",
+        "optimization_type": "code"
+    }
+    
+    # 发送请求
+    response = await test_client.post("/api/v1/optimizer/optimize", json=request_data)
+    
+    # 验证响应
+    assert response.status_code == 200
+    data = response.json()
+    assert "optimized_prompt" in data
+    assert "quality_score_after" in data
+    assert data["quality_score_after"] > 0
+
+@pytest.mark.asyncio
+async def test_evaluate_prompt_quality(test_client):
+    """测试质量评估接口"""
+    request_data = {"prompt": "帮我写代码"}
+    
+    response = await test_client.post("/api/v1/optimizer/evaluate", json=request_data)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert "overall_score" in data
+    assert 0 <= data["overall_score"] <= 10
+```
+
+---
+
+## 🐳 部署配置
+
+### Docker配置
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制依赖文件
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制应用代码
+COPY . .
+
+# 创建非root用户
+RUN useradd --create-home --shell /bin/bash app
+USER app
+
+# 暴露端口
+EXPOSE 8000
+
+# 启动命令
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### Docker Compose配置
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/prompt_optimizer
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./logs:/app/logs
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=prompt_optimizer
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build: .
+    command: celery -A app.core.task_manager worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/prompt_optimizer
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:
+```
+
+---
+
+## 📝 开发规范
+
+### 代码规范
+
+```python
+# pyproject.toml
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+```
+
+### Git Hooks配置
+
+```bash
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.3.0
+    hooks:
+      - id: mypy
+```
+
+---
+
+## 📊 监控和部署
+
+### 健康检查
+
+```python
+# api/v1/health.py
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_async_session
+
+router = APIRouter(prefix="/health", tags=["health"])
+
+@router.get("/")
+async def health_check():
+    """基础健康检查"""
+    return {"status": "healthy", "timestamp": datetime.utcnow()}
+
+@router.get("/db")
+async def database_health_check(db: AsyncSession = Depends(get_async_session)):
+    """数据库健康检查"""
+    try:
+        await db.execute("SELECT 1")
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        return {"status": "unhealthy", "database": str(e)}
+```
+
+---
+
+**文档创建日期**：2024年12月
+**文档版本**：v1.0
+**最后更新**：2024年12月
+
+
+> 本文档将随着项目开发进展持续更新，请确保使用最新版本。 
